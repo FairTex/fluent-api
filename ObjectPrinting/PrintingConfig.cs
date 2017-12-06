@@ -1,25 +1,10 @@
 using System;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
-using NUnit.Framework;
 
 namespace ObjectPrinting
 {
-    public class Config
-    {
-        public HashSet<Type> ExcludedTypes { get; set; } = new HashSet<Type>();
-        public HashSet<string> ExcludedProperties { get; set; } = new HashSet<string>();
-
-        public Dictionary<object, Func<object, string>> SerializeTypes { get; set; } = new Dictionary<object, Func<object, string>>();
-        public Dictionary<string, Func<object, string>> SerializeProperties { get; set; } = new Dictionary<string, Func<object, string>>();
-
-        public CultureInfo CultureInfoForInt { get; set; }
-        public string MemberName { get; set; }
-    }
-
     public class PrintingConfig<TOwner>
     {
         public Config Config = new Config();
@@ -39,13 +24,27 @@ namespace ObjectPrinting
 
             if (Config.SerializeTypes.ContainsKey(objType))
             {
-                return Config.SerializeTypes[objType](obj) + Environment.NewLine;
-            }
+                if (Config.SerializeTypes[objType].CultureInfo != null)
+                {
+                    if (objType == typeof(int))
+                        return ((int)obj).ToString("c", Config.SerializeTypes[objType].CultureInfo) + Environment.NewLine;
 
-            if (objType == typeof(int) && Config.CultureInfoForInt != null)
-            {
-                return ((int)obj).ToString("c", Config.CultureInfoForInt) + Environment.NewLine;
+                    if (objType == typeof(double))
+                        return ((double)obj).ToString("c", Config.SerializeTypes[objType].CultureInfo) + Environment.NewLine;
+
+                    if (objType == typeof(long))
+                        return ((long)obj).ToString("c", Config.SerializeTypes[objType].CultureInfo) + Environment.NewLine;
+
+                    if (objType == typeof(float))
+                        return ((float)obj).ToString("c", Config.SerializeTypes[objType].CultureInfo) + Environment.NewLine;
+
+                }
+                if (Config.SerializeTypes[objType].Serialize != null)
+                {
+                    return Config.SerializeTypes[objType].Serialize(obj) + Environment.NewLine;
+                }
             }
+           
 
             if (Config.ExcludedTypes.Contains(objType))
             {
@@ -67,9 +66,18 @@ namespace ObjectPrinting
             sb.AppendLine(type.Name);
             foreach (var propertyInfo in type.GetProperties())
             {
-                sb.Append(identation + propertyInfo.Name + " = " +
-                          PrintToString(propertyInfo.GetValue(obj),
-                              nestingLevel + 1));
+                var name = propertyInfo.Name;
+
+                if (Config.ExcludedProperties.Contains(name))
+                    continue;
+
+                if (Config.SerializeProperties.ContainsKey(name))
+                    sb.Append(identation + name + " = " +
+                        Config.SerializeProperties[name](propertyInfo.GetValue(obj)));
+                else
+                    sb.Append(identation + name + " = " +
+                              PrintToString(propertyInfo.GetValue(obj),
+                                  nestingLevel + 1));
             }
             return sb.ToString();
         }
@@ -82,73 +90,33 @@ namespace ObjectPrinting
 
         public PrintingConfig<TOwner> ExcludeProperty<TPropType>(Expression<Func<TOwner, TPropType>> func)
         {
-            var memberExpression = (MemberExpression) func.Body;
-            var memberName = memberExpression.Member.Name;
+            var memberName = GetMemberName(func);
             Config.ExcludedProperties.Add(memberName);
             return this;
         }
 
-        // Возвращаем контекст для свойства типа TPropType
+
+        public string GetMemberName<TPropType>(Expression<Func<TOwner, TPropType>> func)
+        {
+            var memberExpression = (MemberExpression)func.Body;
+            return memberExpression.Member.Name;
+        }
+
+       
         public PropertyPrintingConfig<TOwner, TPropType> Printing<TPropType>()
         {
             return new PropertyPrintingConfig<TOwner, TPropType>(this, Config);
         }
 
         
-        public PropertyPrintingConfig<TOwner, TPropType> Printing<TPropType>(Expression<Func<TOwner, TPropType>> func)
+        public PrintingConfig<TOwner> Printing<TPropType>(Expression<Func<TOwner, TPropType>> func, Func<TPropType, string> printing)
         {
-            var memberExpression = (MemberExpression) func.Body;
-            Config.MemberName = memberExpression.Member.Name;
+            var memberName = GetMemberName(func);
+            
+            Config.SerializeProperties[memberName] = x => printing((TPropType) x);
 
-            return new PropertyPrintingConfig<TOwner, TPropType>(this, Config);
+            return this;
         }
 
-    }   
-
-    public class PropertyPrintingConfig<TOwner, TPropType>
-    {
-        public PrintingConfig<TOwner> PrintingConfig;
-        public Config Config;
-        public PropertyPrintingConfig(PrintingConfig<TOwner> printingConfig, Config config)
-        {
-            PrintingConfig = printingConfig;
-            Config = config;
-        }
-
-        // Указываем конкретный способ сериализации для свойства типа TPropType
-        public PrintingConfig<TOwner> Using(Func<TPropType, string> func)
-        {
-            if (Config.MemberName != null)
-            {
-                if (!Config.SerializeProperties.ContainsKey(Config.MemberName))
-                    Config.SerializeProperties.Add(Config.MemberName, x => func((TPropType) x));
-            }
-            else
-            {
-                if (!Config.SerializeTypes.ContainsKey(typeof(TPropType)))
-                    Config.SerializeTypes.Add(typeof(TPropType), x => func((TPropType)x));
-            }
-
-            return PrintingConfig;
-        }
-    }
-
-    public static class PropertyPrintingConfigExtension
-    {
-        // Метод расширения для типа int
-        public static PrintingConfig<TOwner> UseCulture<TOwner>(this PropertyPrintingConfig<TOwner, int> p,
-            CultureInfo cultureInfo)
-        {
-            p.Config.CultureInfoForInt = cultureInfo;
-            return p.PrintingConfig;
-        }
-
-        // Метод расширения для типа string
-        public static PrintingConfig<TOwner> Cut<TOwner>(this PropertyPrintingConfig<TOwner, string> p, 
-            int count)
-        {
-            p.Config.SerializeTypes.Add(typeof(string), x => ((string)x).Substring(0, Math.Min(count, ((string)x).Length)));
-            return p.PrintingConfig;
-        }
     }
 }

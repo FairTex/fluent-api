@@ -49,9 +49,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AddOnlyCollection.cs" />
+    <Compile Include="Config.cs" />
+    <Compile Include="IAddOnlyCollection.cs" />
     <Compile Include="ObjectPrinter.cs" />
     <Compile Include="PrintingConfig.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="PropertyPrintingConfig.cs" />
+    <Compile Include="PropertyPrintingConfigExtension.cs" />
     <Compile Include="Tests\ObjectPrinterAcceptanceTests.cs" />
     <Compile Include="Tests\Person.cs" />
   </ItemGroup>

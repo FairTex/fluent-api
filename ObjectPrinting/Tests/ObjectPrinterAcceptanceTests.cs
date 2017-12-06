@@ -17,18 +17,17 @@ namespace ObjectPrinting.Tests
                 .ExcludeType<Guid>()
                 //2. Указать альтернативный способ сериализации для определенного типа
                 .Printing<Guid>()
-                .Using(prop => "1")
+                .Using(prop => "Guid")
                 //3. Для числовых типов указать культуру
                 .Printing<int>()
                 .UseCulture(CultureInfo.CurrentCulture)
                 //4. Настроить сериализацию конкретного свойства
-                .Printing(p => p.Name)
-                .Using(id => id.ToString()) 
+                .Printing(p => p.Name, id => "NAME ZERO")
                 //5. Настроить обрезание строковых свойств (метод должен быть виден только для строковых свойств)
                 .Printing<string>()
                 .Cut(100)
                 //6. Исключить из сериализации конкретного свойства
-                .ExcludeProperty(p => p.Id);
+                .ExcludeProperty(p => p.Age);
 
             string s1 = printer.PrintToString(person);
 
